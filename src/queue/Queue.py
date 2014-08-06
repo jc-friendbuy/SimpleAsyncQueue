@@ -1,4 +1,5 @@
-from threading import Lock
+from threading import Lock, Condition
+import time
 from event_loop.EventLoop import EventLoop
 from worker.Worker import Worker
 
@@ -13,6 +14,7 @@ class Queue(object):
         self._tasks_in_flight = 0
         self._workers = list()
         self._is_running = False
+        self._on_finish_callbacks = list()
 
         for worker_num in xrange(0, parallelism):
             # TODO not sure about this event loop thing
@@ -38,12 +40,31 @@ class Queue(object):
 
     def add_callback(self, callback):
         with self._lock:
-            self._callbacks.append(callback)
+            self._on_finish_callbacks.append(callback)
 
     def start(self):
         self._is_running = True
         for worker in self._workers:
             worker.start()
+
+        self._start_callback_loop()
+
+    # TODO needs work
+    def _start_callback_loop(self):
+        with Condition(lock=self._lock) as callback_present_condition:
+            while self._is_running:
+                have_callbacks = callback_present_condition.wait_for(len(self._callbacks) > 0, timeout=0.01)
+                if have_callbacks:
+                    self._process_callbacks(self._callbacks)
+
+    def _process_callbacks(self, callback_list):
+        while True:
+            try:
+                callback = callback_list.pop()
+                callback()
+            except IndexError:
+                break
+
 
     # Additional functions #
 
@@ -66,9 +87,7 @@ class Queue(object):
                 return True
             return False
 
+    # TODO not done
     def finish(self):
-        while True:
-            try:
-                self._event_loop.append(self._callbacks.pop())
-            except IndexError:
-                break
+        pass
+
