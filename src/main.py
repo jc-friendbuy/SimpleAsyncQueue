@@ -1,35 +1,58 @@
+import time
 from async_task_queue.Queue import Queue
-from async_task_queue.Task import Task
+from async_task_queue.Function import Function
 
 if __name__ == '__main__':
     print("Starting the queue test.")
     queue = Queue(5)
-    print(queue.in_flight())
-    print(queue.size())
-    print(queue.is_running())
 
-    def print_message(message):
-        print(message)
+    def first_callback(the_queue):
+        print('First end callback')
 
-    queue.add_callback(lambda: print_message('First end callback'))
-    queue.add_callback(lambda: print_message('Second end callback'))
+    def second_callback(the_queue):
+        print('Second end callback')
+        input('First checkpoint reached.  Press return to continue.')
 
-    def first_task(some_number):
-        print_message(some_number)
+        def third_task(callback):
+            print('Third task')
+            callback()
+
+        def third_task_callback():
+            print('Third task done')
+
+        def third_callback(the_queue):
+            print('This is finished')
+            input('Second checkpoint reached.  Press return to exit.')
+
+        print(queue.is_running())
+        print(queue.size())
+
+        queue.add_task(Function(third_task, third_task_callback))
+        queue.add_callback(third_callback)
+        queue.start()
+
+
+    queue.add_callback(first_callback)
+    queue.add_callback(second_callback)
+
+    def first_task(callback):
+        print(queue.in_flight())
+        print(1)
+        callback()
 
     def first_task_finished_callback():
-        print_message('Task 1 done')
+        print('Task 1 done')
         
-    def second_task(some_number):
-        print_message(some_number)
+    def second_task(callback):
+        print(queue.in_flight())
+        print(2)
+        callback()
 
     def second_task_finished_callback():
-        print_message('Task 2 done')
+        print('Task 2 done')
 
-    queue.add_task(Task(first_task, first_task_finished_callback, 5))
-    queue.add_task(Task(second_task, second_task_finished_callback, 8))
+    queue.add_task(Function(first_task, first_task_finished_callback))
+    queue.add_task(Function(second_task, second_task_finished_callback))
 
     queue.start()
-
-    input('First checkpoint reached.  Press return to continue.')
-    print("Done.")
+    queue.start()
