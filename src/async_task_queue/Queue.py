@@ -1,3 +1,4 @@
+from copy import copy
 from threading import RLock, Thread
 import traceback
 
@@ -62,12 +63,11 @@ class Queue(object):
         """
         with self._lock:
             if not self.is_running():
-                self._tasks.insert(0, task)
+                self._tasks.append(task)
             else:
-                # TODO
                 print('Warning: task added while async_task_queue was running.  It has been added to a list and will be executed '
                       'after the next call to `start`.')
-                self._tasks_for_next_run.insert(0, task)
+                self._tasks_for_next_run.append(task)
 
 
     def add_callback(self, callback):
@@ -78,11 +78,11 @@ class Queue(object):
         """
         with self._lock:
             if not self.is_running():
-                self._callbacks.insert(0, callback)
+                self._callbacks.append(callback)
             else:
                 print('Warning: callback added while task queue was running.  It has been registered and will be '
                       'added to the next run.')
-                self._callbacks_for_next_run.insert(0, callback)
+                self._callbacks_for_next_run.append(callback)
 
 
     def start(self):
@@ -91,19 +91,26 @@ class Queue(object):
         :return: Nothing.
         """
         if not self.is_running():
-            self._tasks_for_next_run.extend(self._tasks)
-            self._tasks = self._tasks_for_next_run
-            self._tasks_for_next_run = list()
-
-            self._callbacks_for_next_run.extend(self._callbacks)
-            self._callbacks = self._callbacks_for_next_run
-            self._callbacks_for_next_run = list()
-
+            self._reset_tasks()
+            self._reset_callbacks()
             self._is_running = True
             self._start_worker_threads()
 
 
     # Internal methods #
+
+    def _reset_tasks(self):
+        self._tasks_for_next_run.extend(self._tasks)
+        self._tasks = self._tasks_for_next_run
+        self._tasks_for_next_run = list()
+
+
+    def _reset_callbacks(self):
+        self._callbacks_for_next_run.extend(self._callbacks)
+        self._callbacks = self._callbacks_for_next_run
+        self._callbacks_for_next_run = list()
+
+
     def _start_worker_threads(self):
         """
         Start `self.parallelism` threads to start processing tasks.
@@ -129,9 +136,6 @@ class Queue(object):
             except IndexError:
                 do_work = False
 
-            # Check if the queue run should be finished at the end of the work loop independently of whether a task
-            # was found or not.  This is the correct way to do it because it will properly finish processing even if
-            # no tasks were entered into the queue.
             with self._lock:
                 if self._check_if_all_tasks_done():
                     self._finish_queue_run()
@@ -143,17 +147,29 @@ class Queue(object):
         :return: Nothing.
         """
         with self._lock:
-            task = self._tasks.pop()
+            task = self._tasks.pop(0)
             self._tasks_in_flight += 1
         return task
 
 
     def _run_task(self, task):
-        # TODO: How does the callback work here?
-        self._sandbox_run(task.task, task.callback)
+        """
+        Run a Function object as a task.
+        :param task: The Function object which will be run.
+        :return: Nothing.
+        """
+        self._sandbox_run(task.task)
+        self._sandbox_run(task.callback)
 
 
     def _sandbox_run(self, function, *args, **kwargs):
+        """
+        Run a function in a simple sandbox.
+        :param function: The function which will be run.
+        :param args: The argument tuple that will be provided as argument to the function.
+        :param kwargs: The keyword argument dict that will be provided to the function.
+        :return: Nothing.
+        """
         try:
             function(*args, **kwargs)
         except:
@@ -171,7 +187,7 @@ class Queue(object):
 
     def _finish_task(self):
         """
-        Mark a task as finished and then check if processing is done to finish the current async_task_queue run.
+        Mark a task as finished.
         :return: Nothing.
         """
         with self._lock:
@@ -184,9 +200,6 @@ class Queue(object):
         no tasks are accumulated tasks.
         :return: A boolean value specifying whether all tasks are done or not.
         """
-        # The use of lock here is not required, but it is better to synchronize it as it checks shared thread state.
-        # It is plausible for the results of the functions to vary while the condition is being processed if the lock
-        #  is not used.
         with self._lock:
             if self.is_running() and self.in_flight() == 0 and self.size() == 0:
                 return True
@@ -199,12 +212,12 @@ class Queue(object):
         :return: Nothing.
         """
         with self._lock:
+
+            while True:
+                try:
+                    callback = self._callbacks.pop(0)
+                    self._sandbox_run(callback, self)
+                except IndexError:
+                    break
+
             self._is_running = False
-
-        while True:
-            try:
-                callback = self._callbacks.pop()
-            except IndexError:
-                break
-
-            self._sandbox_run(callback, self)
