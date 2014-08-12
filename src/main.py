@@ -3,7 +3,11 @@ from async_task_queue.Queue import Queue
 from async_task_queue.Function import Function
 
 if __name__ == '__main__':
+
     print("Starting the queue test.")
+    print("Two tasks are created and executed concurrently, then a checkpoint is reached.  Afterwards, the queue is "
+          "filled again and re-run, and the final checkpoint is reached.")
+
     queue = Queue(5)
 
     def first_callback(the_queue):
@@ -21,11 +25,7 @@ if __name__ == '__main__':
             print('Third task done')
 
         def third_callback(the_queue):
-            print('This is finished')
             input('Second checkpoint reached.  Press return to exit.')
-
-        print(queue.is_running())
-        print(queue.size())
 
         queue.add_task(Function(third_task, third_task_callback))
         queue.add_callback(third_callback)

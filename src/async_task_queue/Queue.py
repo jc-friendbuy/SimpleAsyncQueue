@@ -17,7 +17,6 @@ class Queue(object):
         self._parallelism = parallelism
 
         self._lock = RLock()
-        self._worker_threads = None
 
         self._tasks = list()
         self._tasks_for_next_run = list()
@@ -113,7 +112,6 @@ class Queue(object):
         self._worker_threads = list()
         for thread_num in range(0, self._parallelism):
             worker_thread = Thread(target=self._process_tasks)
-            self._worker_threads.append(worker_thread)
             worker_thread.start()
 
 
@@ -210,4 +208,3 @@ class Queue(object):
                 break
 
             self._sandbox_run(callback, self)
-
