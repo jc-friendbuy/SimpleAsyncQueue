@@ -100,12 +100,22 @@ class Queue(object):
     # Internal methods #
 
     def _reset_tasks(self):
+        """
+        Set the accumulated tasks as the first tasks to run and the added ones as the last ones in the queue; then,
+        set the tasks for next run as an empty list.
+        :return: Nothing.
+        """
         self._tasks_for_next_run.extend(self._tasks)
         self._tasks = self._tasks_for_next_run
         self._tasks_for_next_run = list()
 
 
     def _reset_callbacks(self):
+        """
+        Set the accumulated callbacks as the first callbacks to run and the added ones as the last ones in the queue;
+        then, set the callbacks for next run as an empty list.
+        :return: Nothing.
+        """
         self._callbacks_for_next_run.extend(self._callbacks)
         self._callbacks = self._callbacks_for_next_run
         self._callbacks_for_next_run = list()
